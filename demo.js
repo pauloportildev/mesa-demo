@@ -46,13 +46,18 @@ def post(path, body):
 `;
 
 let py = null;
+let failed = false;
 const loadingText = () => document.getElementById('loading-text');
 
 const ready = (async () => {
   const pyodide = await loadPyodide();
   if (loadingText()) loadingText().textContent = 'Contratando os robôs…';
   pyodide.FS.mkdirTree('/mesa/floor');
-  const sources = await Promise.all(FILES.map((f) => fetch(`py/floor/${f}`).then((r) => r.text())));
+  const sources = await Promise.all(FILES.map(async (f) => {
+    const res = await fetch(`py/floor/${f}`);
+    if (!res.ok) throw new Error(`arquivo ${f}: HTTP ${res.status}`);
+    return res.text();
+  }));
   FILES.forEach((f, i) => pyodide.FS.writeFile(`/mesa/floor/${f}`, sources[i]));
   pyodide.FS.writeFile('/mesa/floor.json', JSON.stringify(CONFIG));
   pyodide.runPython('import sys; sys.path.insert(0, "/mesa")');
@@ -60,6 +65,7 @@ const ready = (async () => {
   py = { snapshot: pyodide.globals.get('snapshot'), post: pyodide.globals.get('post'), engine: pyodide.globals.get('engine') };
   setInterval(() => py.engine.tick(), CONFIG.refresh_seconds * 1000);
 })().catch((err) => {
+  failed = true;
   console.error(err);
   if (loadingText()) loadingText().textContent = 'Não consegui abrir a demonstração. Confira a internet e recarregue a página.';
 });
@@ -69,6 +75,7 @@ const realFetch = window.fetch.bind(window);
 window.fetch = async (input, init = {}) => {
   const url = new URL(typeof input === 'string' ? input : input.url, location.href);
   if (url.origin !== location.origin || !url.pathname.startsWith('/api/')) return realFetch(input, init);
+  if (failed) return json(503, JSON.stringify({ error: 'demonstração indisponível' }));
   if (!py) return json(200, JSON.stringify({ loading: true }));
   if ((init.method || 'GET').toUpperCase() === 'GET') return json(200, py.snapshot());
   const result = py.post(url.pathname, init.body || '{}');
