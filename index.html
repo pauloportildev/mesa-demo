@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mesa de Operações · Demonstração</title>
+  <meta name="description" content="Demonstração da Mesa de Operações: robôs de trading de cripto numa sala 3D, com dinheiro fictício.">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="scene"></div>
+
+  <header id="hud" class="panel">
+    <div class="brand">
+      <span class="logo"></span>
+      <div>
+        <strong>Mesa de Operações</strong>
+        <div class="badges"><span id="mode" class="badge">—</span><span id="enforce" class="badge warn" hidden>ejeção só visual</span></div>
+      </div>
+    </div>
+    <a class="briefing-link" href="https://pauloportildev.github.io/conversa-descoberta/" target="_blank" rel="noopener">Responder o questionário ↗</a>
+    <button id="hire-open" class="hire-button" type="button" hidden>+ Contratar funcionário</button>
+    <button id="simulate-gain" class="gain-button" type="button" title="Mostra a comemoração de um ganho sem fazer operação nem mexer na carteira. Com um robô selecionado, ele é quem comemora.">Simular ganho</button>
+    <div class="kpis">
+      <div class="kpi"><label>Patrimônio</label><b id="k-equity">—</b><small id="k-total">—</small></div>
+      <div class="kpi"><label>Resultado aberto</label><b id="k-open">—</b><small id="k-open-n">—</small></div>
+      <div class="kpi"><label>Hoje (realizado)</label><b id="k-today">—</b><small id="k-winrate">—</small></div>
+      <div class="kpi"><label>Robôs</label><b id="k-robots">—</b><small>operando · zerados · ejetados</small></div>
+      <div class="kpi kill"><label>Kill-line da carteira</label><div class="bar"><i id="k-kill-bar"></i></div><small id="k-kill">—</small></div>
+    </div>
+    <div class="clock">
+      <div><span id="conn" class="conn"></span><span id="k-next">conectando…</span></div>
+      <small id="k-updated">—</small>
+    </div>
+  </header>
+
+  <aside id="events" class="panel">
+    <h3>Acontecimentos</h3>
+    <ol id="event-list"></ol>
+  </aside>
+
+  <aside id="side" class="panel">
+    <h3>Como ler a sala</h3>
+    <ul class="legend">
+      <li><i class="lg sit"></i>Sentado na mesa: robô com operação aberta</li>
+      <li><i class="lg idle"></i>Café, sinuca, pista ou conversa: zerado, esperando sinal</li>
+      <li><i class="lg pnl"></i>Número na cabeça: resultado aberto (zerado: acumulado, mais apagado)</li>
+      <li><i class="lg out"></i>Ejetado: bateu o teto de drawdown definido antes de entrar no ar</li>
+    </ul>
+    <h3>Ejetados <span id="ejected-count" class="count">0</span></h3>
+    <ol id="ejected-list"><li class="empty">Nenhum até agora.</li></ol>
+    <label class="toggle"><input type="checkbox" id="show-names" checked> Mostrar nomes</label>
+  </aside>
+
+  <section id="detail" class="panel" hidden>
+    <button id="detail-close" class="x-close" aria-label="Fechar">×</button>
+    <div id="detail-body"></div>
+  </section>
+
+  <div id="hire" class="modal" hidden>
+    <form id="hire-form" class="modal-card" novalidate>
+      <button type="button" class="x-close" id="hire-close" aria-label="Fechar">×</button>
+      <h2>Contratar funcionário</h2>
+      <p class="modal-sub">Ele entra na sala, ganha uma mesa e começa a trabalhar na função que você escolher.</p>
+      <label class="f-label" for="hire-name">Nome</label>
+      <input id="hire-name" name="name" type="text" maxlength="40" placeholder="Ex.: Ana do Bitcoin" required>
+      <fieldset class="f-roles">
+        <legend class="f-label">Função</legend>
+        <label class="role-opt"><input type="radio" name="role" value="auto"><span><b>Operar sozinho</b><small>Segue a estratégia automática e compra e vende por conta própria, dentro dos limites.</small></span></label>
+        <label class="role-opt"><input type="radio" name="role" value="manual" checked><span><b>Só sob meu comando</b><small>Fica esperando. Compra e vende só quando você clicar nele e mandar.</small></span></label>
+        <label class="role-opt"><input type="radio" name="role" value="watch"><span><b>Vigiar preço e avisar</b><small>Não opera. Avisa quando o preço passar dos valores que você definir.</small></span></label>
+      </fieldset>
+      <div class="f-row">
+        <div><label class="f-label" for="hire-pair">Moeda</label><select id="hire-pair" name="pair"></select></div>
+        <div class="trade-only"><label class="f-label" for="hire-stake">Valor por operação</label><input id="hire-stake" name="stake" type="number" min="1" step="1" inputmode="decimal"></div>
+      </div>
+      <div class="trade-only">
+        <label class="f-label" for="hire-limit">Limite de perda (sai da mesa ao bater)</label>
+        <input id="hire-limit" name="max_drawdown" type="number" min="0.01" step="0.01" inputmode="decimal">
+      </div>
+      <div class="f-row watch-only" hidden>
+        <div><label class="f-label" for="hire-above">Avisar se subir acima de</label><input id="hire-above" name="alert_above" type="number" min="0" step="any" inputmode="decimal"></div>
+        <div><label class="f-label" for="hire-below">Avisar se cair abaixo de</label><input id="hire-below" name="alert_below" type="number" min="0" step="any" inputmode="decimal"></div>
+      </div>
+      <p id="hire-price" class="modal-sub"></p>
+      <p id="hire-error" class="form-error" role="alert"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="hire-cancel">Cancelar</button>
+        <button type="submit" class="btn primary" id="hire-submit">Contratar</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="demo-ribbon">Demonstração · robôs e dinheiro fictícios · clique num robô para ver e dar ordens</div>
+  <div id="banner" hidden></div>
+  <div id="loading"><div class="spinner"></div><p id="loading-text">Preparando a demonstração… (na primeira vez leva uns segundos)</p></div>
+
+  <script type="module" src="demo.js"></script>
+  <script type="module" src="floor.js"></script>
+</body>
+</html>
